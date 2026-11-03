@@ -4,14 +4,16 @@ const ADMIN_PASS = "station123";
 let isAdminLoggedIn = false;
 
 // --- CONFIGURACIÓN DE FIREBASE ---
+
 const firebaseConfig = {
-    apiKey: "TU_API_KEY",
-    authDomain: "TU_PROYECTO.firebaseapp.com",
-    projectId: "TU_PROJECT_ID",
-    storageBucket: "TU_PROYECTO.appspot.com",
-    messagingSenderId: "TU_MESSAGING_SENDER_ID",
-    appId: "TU_APP_ID"
+  apiKey: "AIzaSyBIY2-3it6w6oU8GYSXBfn4nBFXDwoJUUc",
+  authDomain: "station-bajon.firebaseapp.com",
+  projectId: "station-bajon",
+  storageBucket: "station-bajon.firebasestorage.app",
+  messagingSenderId: "738699771128",
+  appId: "1:738699771128:web:a4eafa2a3e54e97698cf0d"
 };
+
 
 // Inicializar Firebase de manera segura
 if (!firebase.apps.length) {
