@@ -2,6 +2,7 @@
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "station123";
 let isAdminLoggedIn = false;
+let isMigrating = false;
 
 // --- CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
@@ -19,7 +20,7 @@ if (!firebase.apps.length) {
 }
 const db = firebase.firestore();
 
-// MENÚ BASE DE RESPALDO (Por si la base de datos Firestore está vacía al iniciar)
+// MENÚ BASE DE RESPALDO
 const menuBase = [
     // 1. HAMBURGUESAS CHEDDAR
     { id: 1, categoria: 'hamburguesas', nombre: 'Cheddar Simple', descripcion: 'Carne, cheddar. Incluye papas fritas.', precio: 8500, disponible: true },
@@ -73,9 +74,9 @@ let carrito = [];
 let pedidos = [];
 let categoriaActual = 'todas';
 
-// --- INICIALIZACIÓN Y CONEXIÓN CON FIRESTORE EN TIEMPO REAL ---
+// --- INICIALIZACIÓN Y CONEXIÓN CON FIRESTORE ---
 document.addEventListener("DOMContentLoaded", () => {
-    // 1. Carrusel de Fotos con Zoom Progresivo
+    // 1. Carrusel de Fotos
     const fotos = document.querySelectorAll(".foto-carrusel");
     let indexFoto = 0;
     const tiempoCarrusel = 5000;
@@ -91,14 +92,10 @@ document.addEventListener("DOMContentLoaded", () => {
         fotos[indexFoto].classList.add("opacity-100", "scale-110");
     }
 
-    if (fotos.length > 0) {
-        fotos[0].classList.add("scale-110");
-    }
-    if (fotos.length > 1) {
-        setInterval(rotarCarruselFotos, tiempoCarrusel);
-    }
+    if (fotos.length > 0) fotos[0].classList.add("scale-110");
+    if (fotos.length > 1) setInterval(rotarCarruselFotos, tiempoCarrusel);
 
-    // 2. Escuchar Estado del Local en Tiempo Real desde Firebase
+    // 2. Escuchar Estado del Local
     db.collection("configuracion").doc("local").onSnapshot((doc) => {
         if (doc.exists) {
             localAbierto = doc.data().abierto !== false;
@@ -110,8 +107,10 @@ document.addEventListener("DOMContentLoaded", () => {
         renderProductos();
     });
 
-    // 3. Escuchar Menú / Stock en Tiempo Real desde Firebase (Sin duplicados y con auto-carga)
+    // 3. Escuchar Menú en Tiempo Real de Forma Controlada
     db.collection("menu").onSnapshot((snapshot) => {
+        if (isMigrating) return; // Bloquear lecturas múltiples durante la inicialización
+
         const nuevosProductos = [];
         snapshot.forEach((doc) => {
             nuevosProductos.push({ idFirebase: doc.id, ...doc.data() });
@@ -119,18 +118,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
         menu = nuevosProductos;
 
-        // Si la base de datos está vacía, cargamos el menú base una sola vez automáticamente
-        if (menu.length === 0) {
+        // Carga inicial solo si la base de datos está totalmente vacía
+        if (menu.length === 0 && !isMigrating) {
+            isMigrating = true;
+            const batch = db.batch();
             menuBase.forEach(itemBase => {
-                db.collection("menu").add(itemBase);
+                const docRef = db.collection("menu").doc();
+                batch.set(docRef, itemBase);
             });
+            batch.commit().then(() => {
+                isMigrating = false;
+            });
+            return;
         }
 
         renderProductos();
         if (isAdminLoggedIn) renderAdminStock();
     });
 
-    // 4. Escuchar Pedidos / Comandera en Tiempo Real desde Firebase
+    // 4. Escuchar Pedidos / Comandera
     db.collection("pedidos").orderBy("id", "desc").onSnapshot((snapshot) => {
         pedidos = [];
         snapshot.forEach((doc) => {
@@ -346,7 +352,6 @@ function enviarAPedidoWhatsApp() {
         total: total
     };
 
-    // Guardar en Firestore para que la comandera lo reciba al instante
     db.collection("pedidos").add(nuevoPedido).then(() => {
         let msj = `*--- NUEVO PEDIDO - STATION BAJÓN ---*\n`;
         msj += `*Cliente:* ${nombre}\n`;
@@ -487,7 +492,7 @@ function limpiarComandera() {
     }
 }
 
-// RENDER DE CONTROL DE STOCK EN ADMIN (Actualiza Firestore)
+// RENDER DE CONTROL DE STOCK EN ADMIN
 function renderAdminStock() {
     const container = document.getElementById('stock-lista');
     if (!container) return;
