@@ -110,8 +110,6 @@ document.addEventListener("DOMContentLoaded", () => {
         renderProductos();
     });
 
-    // 3. Escuchar Menú / Stock en Tiempo Real desde Firebase
-  
     // 3. Escuchar Menú / Stock en Tiempo Real desde Firebase y sincronizar faltantes
     db.collection("menu").onSnapshot((snapshot) => {
         menu = [];
@@ -119,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
             menu.push({ idFirebase: doc.id, ...doc.data() });
         });
 
-        // Si la base de datos tiene menos elementos que el menuBase local, completamos los faltantes
+        // Si la base de datos tiene menos elementos que el menuBase local, completamos los faltantes automáticamente
         if (menu.length < menuBase.length) {
             menuBase.forEach(itemBase => {
                 const existe = menu.some(m => m.id === itemBase.id);
@@ -127,23 +125,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     db.collection("menu").add(itemBase);
                 }
             });
-        } else {
-            renderProductos();
-            if (isAdminLoggedIn) renderAdminStock();
         }
-    });
-        });
 
-        // Si la base de datos está vacía, subimos el menú base automáticamente
-        if (menu.length === 0) {
-            menuBase.forEach(item => {
-                db.collection("menu").add(item);
-            });
-        } else {
-            renderProductos();
-            if (isAdminLoggedIn) renderAdminStock();
-        }
-    }); }
+        renderProductos();
+        if (isAdminLoggedIn) renderAdminStock();
+    });
 
     // 4. Escuchar Pedidos / Comandera en Tiempo Real desde Firebase
     db.collection("pedidos").orderBy("id", "desc").onSnapshot((snapshot) => {
@@ -492,7 +478,6 @@ function toggleEstadoLocal() {
 
 function limpiarComandera() {
     if (confirm("¿Estás seguro de borrar todos los pedidos de la base de datos?")) {
-        // Borrar todos los documentos de la colección pedidos en Firestore
         db.collection("pedidos").get().then((querySnapshot) => {
             querySnapshot.forEach((doc) => {
                 db.collection("pedidos").doc(doc.id).delete();
