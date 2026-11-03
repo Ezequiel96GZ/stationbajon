@@ -143,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
             renderProductos();
             if (isAdminLoggedIn) renderAdminStock();
         }
-    });
+    }); }
 
     // 4. Escuchar Pedidos / Comandera en Tiempo Real desde Firebase
     db.collection("pedidos").orderBy("id", "desc").onSnapshot((snapshot) => {
