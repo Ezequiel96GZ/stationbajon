@@ -111,11 +111,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // 3. Escuchar Menú / Stock en Tiempo Real desde Firebase
-    /*db.collection("menu").onSnapshot((snapshot) => {
-        menu = [];
-        snapshot.forEach((doc) => {
-            menu.push({ idFirebase: doc.id, ...doc.data() });*/
-
+  
     // 3. Escuchar Menú / Stock en Tiempo Real desde Firebase y sincronizar faltantes
     db.collection("menu").onSnapshot((snapshot) => {
         menu = [];
