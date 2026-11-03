@@ -461,7 +461,7 @@ function renderBotonLocal() {
     if (!btn) return;
     if (localAbierto) {
         btn.className = "bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-oswald font-bold text-sm uppercase transition";
-        btn.innerText = "🟢 Local Abierto";
+        btn.innerText = "✅ Local Abierto";
     } else {
         btn.className = "bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-oswald font-bold text-sm uppercase transition";
         btn.innerText = "🔴 Local Cerrado";
