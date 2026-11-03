@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
         renderProductos();
     });
 
-    // 3. Escuchar Menú / Stock en Tiempo Real desde Firebase y sincronizar faltantes
+    // 3. Escuchar Menú / Stock en Tiempo Real desde Firebase (Sin duplicados y con auto-carga)
     db.collection("menu").onSnapshot((snapshot) => {
         const nuevosProductos = [];
         snapshot.forEach((doc) => {
@@ -119,26 +119,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         menu = nuevosProductos;
 
-        // Si la base de datos está vacía, cargamos el menú base una sola vez
+        // Si la base de datos está vacía, cargamos el menú base una sola vez automáticamente
         if (menu.length === 0) {
             menuBase.forEach(itemBase => {
                 db.collection("menu").add(itemBase);
-            });
-        }
-
-        renderProductos();
-        if (isAdminLoggedIn) renderAdminStock();
-    });
-
-        
-
-        // Si la base de datos tiene menos elementos que el menuBase local, completamos los faltantes automáticamente
-        if (menu.length < menuBase.length) {
-            menuBase.forEach(itemBase => {
-                const existe = menu.some(m => m.id === itemBase.id);
-                if (!existe) {
-                    db.collection("menu").add(itemBase);
-                }
             });
         }
 
