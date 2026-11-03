@@ -1,8 +1,7 @@
-// Credenciales Predefinidas
+/// Credenciales Predefinidas
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "station123";
 let isAdminLoggedIn = false;
-
 
 // --- CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
@@ -14,55 +13,13 @@ const firebaseConfig = {
     appId: "TU_APP_ID"
 };
 
-// Inicializar Firebase
-firebase.initializeApp(firebaseConfig);
+// Inicializar Firebase de manera segura
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 const db = firebase.firestore();
 
-// MENÚ COMPLETO Y REAL DE STATION BAJÓN
-
-// --- Carrusel de Fotos con Zoom Progresivo ---
-document.addEventListener("DOMContentLoaded", () => {
-    const fotos = document.querySelectorAll(".foto-carrusel");
-    let indexFoto = 0;
-    const tiempoCarrusel = 5000; // 5 segundos por foto
-
-    function rotarCarruselFotos() {
-        if (fotos.length === 0) return;
-
-        // Ocultar la foto actual y resetear zoom
-        fotos[indexFoto].classList.remove("opacity-100", "scale-110");
-        fotos[indexFoto].classList.add("opacity-0", "scale-100");
-
-        // Pasar a la siguiente
-        indexFoto = (indexFoto + 1) % fotos.length;
-
-        // Mostrar la nueva foto y activar el zoom lento (escala al 110%)
-        fotos[indexFoto].classList.remove("opacity-0");
-        fotos[indexFoto].classList.add("opacity-100", "scale-110");
-    }
-
-    // Inicializar la primera foto con zoom
-    if (fotos.length > 0) {
-        fotos[0].classList.add("scale-110");
-    }
-
-    // Activar el intervalo si hay más de una foto
-    if (fotos.length > 1) {
-        setInterval(rotarCarruselFotos, tiempoCarrusel);
-    }
-});
-
-function abrirPanelAdmin() {
-    document.getElementById('view-cliente').classList.add('hidden');
-    document.getElementById('view-admin').classList.remove('hidden');
-    // ... tus otras funciones de carga de Firebase para admin
-}
-
-function volverAlMenu() {
-    document.getElementById('view-admin').classList.add('hidden');
-    document.getElementById('view-cliente').classList.remove('hidden');
-}
-
+// MENÚ BASE DE RESPALDO (Por si la base de datos Firestore está vacía al iniciar)
 const menuBase = [
     // 1. HAMBURGUESAS CHEDDAR
     { id: 1, categoria: 'hamburguesas', nombre: 'Cheddar Simple', descripcion: 'Carne, cheddar. Incluye papas fritas.', precio: 8500, disponible: true },
@@ -109,26 +66,83 @@ const menuBase = [
     { id: 26, categoria: 'bebidas', nombre: 'Manaos Cola 600 ml', descripcion: 'Botella de Manaos Cola fría 600ml.', precio: 1500, disponible: true }
 ];
 
-// Estado del Local (true: Abierto, false: Cerrado)
-let localAbierto = JSON.parse(localStorage.getItem('sb_local_abierto'));
-if (localAbierto === null) localAbierto = true;
-
-// Cargar menú
-let menu = JSON.parse(localStorage.getItem('sb_menu')) || menuBase;
-
-if (menu.length !== menuBase.length) {
-    menu = menuBase;
-    localStorage.setItem('sb_menu', JSON.stringify(menu));
-}
-
+// Variables de Estado Globales
+let localAbierto = true;
+let menu = [];
 let carrito = [];
-let pedidos = JSON.parse(localStorage.getItem('sb_pedidos')) || [];
+let pedidos = [];
 let categoriaActual = 'todas';
+
+// --- INICIALIZACIÓN Y CONEXIÓN CON FIRESTORE EN TIEMPO REAL ---
+document.addEventListener("DOMContentLoaded", () => {
+    // 1. Carrusel de Fotos con Zoom Progresivo
+    const fotos = document.querySelectorAll(".foto-carrusel");
+    let indexFoto = 0;
+    const tiempoCarrusel = 5000;
+
+    function rotarCarruselFotos() {
+        if (fotos.length === 0) return;
+        fotos[indexFoto].classList.remove("opacity-100", "scale-110");
+        fotos[indexFoto].classList.add("opacity-0", "scale-100");
+
+        indexFoto = (indexFoto + 1) % fotos.length;
+
+        fotos[indexFoto].classList.remove("opacity-0");
+        fotos[indexFoto].classList.add("opacity-100", "scale-110");
+    }
+
+    if (fotos.length > 0) {
+        fotos[0].classList.add("scale-110");
+    }
+    if (fotos.length > 1) {
+        setInterval(rotarCarruselFotos, tiempoCarrusel);
+    }
+
+    // 2. Escuchar Estado del Local en Tiempo Real desde Firebase
+    db.collection("configuracion").doc("local").onSnapshot((doc) => {
+        if (doc.exists) {
+            localAbierto = doc.data().abierto !== false;
+        } else {
+            db.collection("configuracion").doc("local").set({ abierto: true });
+            localAbierto = true;
+        }
+        renderBotonLocal();
+        renderProductos();
+    });
+
+    // 3. Escuchar Menú / Stock en Tiempo Real desde Firebase
+    db.collection("menu").onSnapshot((snapshot) => {
+        menu = [];
+        snapshot.forEach((doc) => {
+            menu.push({ idFirebase: doc.id, ...doc.data() });
+        });
+
+        // Si la base de datos está vacía, subimos el menú base automáticamente
+        if (menu.length === 0) {
+            menuBase.forEach(item => {
+                db.collection("menu").add(item);
+            });
+        } else {
+            renderProductos();
+            if (isAdminLoggedIn) renderAdminStock();
+        }
+    });
+
+    // 4. Escuchar Pedidos / Comandera en Tiempo Real desde Firebase
+    db.collection("pedidos").orderBy("id", "desc").onSnapshot((snapshot) => {
+        pedidos = [];
+        snapshot.forEach((doc) => {
+            pedidos.push({ idFirebase: doc.id, ...doc.data() });
+        });
+        if (isAdminLoggedIn) renderAdmin();
+    });
+});
 
 // Render Menú Cliente
 function renderProductos(categoria = categoriaActual) {
     categoriaActual = categoria;
     const grid = document.getElementById('productos-grid');
+    if (!grid) return;
     grid.innerHTML = '';
     const filtrados = categoria === 'todas' ? menu : menu.filter(p => p.categoria === categoria);
 
@@ -144,7 +158,7 @@ function renderProductos(categoria = categoriaActual) {
                     <span class="font-oswald text-brand-yellow text-lg font-bold mt-2 block">$${prod.precio.toLocaleString()}</span>
                 </div>
                 ${disponible ? `
-                    <button onclick="agregarAlCarrito(${prod.id})" class="bg-brand-yellow text-brand-black px-4 py-2 rounded-lg font-bold font-oswald text-sm hover:bg-brand-darkYellow uppercase transition">
+                    <button onclick="agregarAlCarrito('${prod.idFirebase}')" class="bg-brand-yellow text-brand-black px-4 py-2 rounded-lg font-bold font-oswald text-sm hover:bg-brand-darkYellow uppercase transition">
                         + Agregar
                     </button>
                 ` : `
@@ -163,13 +177,15 @@ function actualizarBannerLocal() {
     const titulo = document.getElementById('titulo-estado');
     const emoji = document.getElementById('emoji-estado');
 
+    if (!banner) return;
+
     if (localAbierto) {
-        banner.className = "bg-brand-yellow text-brand-black p-4 rounded-xl mb-6 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center";
+        banner.className = "relative w-full text-brand-black py-3 px-5 rounded-xl mb-4 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center bg-brand-yellow";
         badge.innerText = "HOY SE BAJONEA";
         titulo.innerText = "Realiza tu pedido online";
         emoji.innerText = "🍔";
     } else {
-        banner.className = "bg-red-600 text-white p-4 rounded-xl mb-6 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center";
+        banner.className = "relative w-full text-white py-3 px-5 rounded-xl mb-4 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center bg-red-600";
         badge.innerText = "LOCAL CERRADO";
         titulo.innerText = "No estamos tomando pedidos ahora";
         emoji.innerText = "🚫";
@@ -187,19 +203,19 @@ function filtrarCategoria(cat) {
 }
 
 // Carrito
-function agregarAlCarrito(id) {
+function agregarAlCarrito(idFirebase) {
     if (!localAbierto) {
         alert("El local se encuentra cerrado temporalmente.");
         return;
     }
 
-    const prod = menu.find(p => p.id === id);
+    const prod = menu.find(p => p.idFirebase === idFirebase);
     if (!prod || prod.disponible === false) {
         alert("Este producto no está disponible por hoy.");
         return;
     }
 
-    const index = carrito.findIndex(item => item.id === id);
+    const index = carrito.findIndex(item => item.idFirebase === idFirebase);
 
     if (index > -1) {
         carrito[index].cantidad += 1;
@@ -210,8 +226,8 @@ function agregarAlCarrito(id) {
     actualizarCarritoUI();
 }
 
-function modificarCantidad(id, cambio) {
-    const index = carrito.findIndex(item => item.id === id);
+function modificarCantidad(idFirebase, cambio) {
+    const index = carrito.findIndex(item => item.idFirebase === idFirebase);
     if (index > -1) {
         carrito[index].cantidad += cambio;
         if (carrito[index].cantidad <= 0) {
@@ -262,9 +278,9 @@ function renderModalCarrito() {
                     <span class="text-xs text-brand-yellow font-bold">$${item.precio.toLocaleString()} c/u</span>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button onclick="modificarCantidad(${item.id}, -1)" class="w-6 h-6 bg-gray-800 text-white rounded font-bold text-xs">-</button>
+                    <button onclick="modificarCantidad('${item.idFirebase}', -1)" class="w-6 h-6 bg-gray-800 text-white rounded font-bold text-xs">-</button>
                     <span class="text-sm font-bold w-4 text-center">${item.cantidad}</span>
-                    <button onclick="modificarCantidad(${item.id}, 1)" class="w-6 h-6 bg-brand-yellow text-brand-black rounded font-bold text-xs">+</button>
+                    <button onclick="modificarCantidad('${item.idFirebase}', 1)" class="w-6 h-6 bg-brand-yellow text-brand-black rounded font-bold text-xs">+</button>
                 </div>
             </div>
         `;
@@ -283,7 +299,7 @@ function cambiarTipoEntrega() {
     }
 }
 
-// WhatsApp Direct Link
+// Envío de Pedido a Firestore y WhatsApp
 function enviarAPedidoWhatsApp() {
     if (!localAbierto) {
         alert("El local cerró. No se pueden procesar nuevos pedidos.");
@@ -306,7 +322,7 @@ function enviarAPedidoWhatsApp() {
     }
 
     for (let item of carrito) {
-        const actual = menu.find(m => m.id === item.id);
+        const actual = menu.find(m => m.idFirebase === item.idFirebase);
         if (actual && actual.disponible === false) {
             alert(`El producto "${item.nombre}" ya no está disponible por hoy. Quítalo del carrito para continuar.`);
             return;
@@ -314,9 +330,10 @@ function enviarAPedidoWhatsApp() {
     }
 
     const total = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
+    const pedidoId = Date.now();
 
     const nuevoPedido = {
-        id: Date.now(),
+        id: pedidoId,
         fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         cliente: nombre,
         tipo: tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️',
@@ -327,33 +344,37 @@ function enviarAPedidoWhatsApp() {
         total: total
     };
 
-    pedidos.unshift(nuevoPedido);
-    localStorage.setItem('sb_pedidos', JSON.stringify(pedidos));
+    // Guardar en Firestore para que la comandera lo reciba al instante
+    db.collection("pedidos").add(nuevoPedido).then(() => {
+        let msj = `*--- NUEVO PEDIDO - STATION BAJÓN ---*\n`;
+        msj += `*Cliente:* ${nombre}\n`;
+        msj += `*Modalidad:* ${tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️'}\n`;
+        if (tipo === 'delivery') {
+            msj += `*Dirección:* ${direccion}\n`;
+        }
+        msj += `*Pago:* ${pago}\n`;
+        if (notas) {
+            msj += `*Notas:* ${notas}\n`;
+        }
+        msj += `\n*DETALLE DEL PEDIDO:*\n`;
 
-    let msj = `*--- NUEVO PEDIDO - STATION BAJÓN ---*\n`;
-    msj += `*Cliente:* ${nombre}\n`;
-    msj += `*Modalidad:* ${tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️'}\n`;
-    if (tipo === 'delivery') {
-        msj += `*Dirección:* ${direccion}\n`;
-    }
-    msj += `*Pago:* ${pago}\n`;
-    if (notas) {
-        msj += `*Notas:* ${notas}\n`;
-    }
-    msj += `\n*DETALLE DEL PEDIDO:*\n`;
+        carrito.forEach(item => {
+            msj += `• ${item.cantidad}x ${item.nombre} ($${(item.precio * item.cantidad).toLocaleString()})\n`;
+        });
 
-    carrito.forEach(item => {
-        msj += `• ${item.cantidad}x ${item.nombre} ($${(item.precio * item.cantidad).toLocaleString()})\n`;
+        msj += `\n*TOTAL: $${total.toLocaleString()}*`;
+
+        const url = `https://api.whatsapp.com/send?phone=5491130294713&text=${encodeURIComponent(msj)}`;
+
+        carrito = [];
+        actualizarCarritoUI();
+        toggleCarritoModal();
+
+        window.open(url, '_blank');
+    }).catch((error) => {
+        console.error("Error al registrar el pedido: ", error);
+        alert("Hubo un error al enviar el pedido a la base de datos.");
     });
-
-    msj += `\n*TOTAL: $${total.toLocaleString()}*`;
-
-    const url = `https://api.whatsapp.com/send?phone=5491130294713&text=${encodeURIComponent(msj)}`;
-
-    carrito = [];
-    actualizarCarritoUI();
-
-    window.open(url, '_blank');
 }
 
 // LÓGICA DE AUTENTICACIÓN ADMIN
@@ -402,7 +423,7 @@ function volverAlMenu() {
 function cerrarSesionAdmin() {
     isAdminLoggedIn = false;
     volverAlMenu();
-    document.getElementById('btn-admin-access').innerText = "🔒 Admin / Comandera";
+    document.getElementById('btn-admin-access').innerText = "🔒 ADMIN";
     document.getElementById('admin-user').value = "";
     document.getElementById('admin-pass').value = "";
 }
@@ -430,6 +451,7 @@ function cambiarSolapaAdmin(solapa) {
 // CONTROL DE LOCAL (ABIERTO / CERRADO)
 function renderBotonLocal() {
     const btn = document.getElementById('btn-toggle-local');
+    if (!btn) return;
     if (localAbierto) {
         btn.className = "bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-oswald font-bold text-sm uppercase transition";
         btn.innerText = "🟢 Local Abierto";
@@ -441,22 +463,33 @@ function renderBotonLocal() {
 
 function toggleEstadoLocal() {
     localAbierto = !localAbierto;
-    localStorage.setItem('sb_local_abierto', JSON.stringify(localAbierto));
-    renderBotonLocal();
-    renderProductos();
+    db.collection("configuracion").doc("local").set({
+        abierto: localAbierto
+    }).then(() => {
+        renderBotonLocal();
+        renderProductos();
+    }).catch((error) => {
+        console.error("Error al actualizar el estado del local: ", error);
+    });
 }
 
 function limpiarComandera() {
-    if (confirm("¿Estás seguro de borrar todos los pedidos guardados para empezar un nuevo día?")) {
-        pedidos = [];
-        localStorage.removeItem('sb_pedidos');
-        renderAdmin();
+    if (confirm("¿Estás seguro de borrar todos los pedidos de la base de datos?")) {
+        // Borrar todos los documentos de la colección pedidos en Firestore
+        db.collection("pedidos").get().then((querySnapshot) => {
+            querySnapshot.forEach((doc) => {
+                db.collection("pedidos").doc(doc.id).delete();
+            });
+        }).catch((error) => {
+            console.error("Error al limpiar la comandera: ", error);
+        });
     }
 }
 
-// RENDER DE CONTROL DE STOCK EN ADMIN
+// RENDER DE CONTROL DE STOCK EN ADMIN (Actualiza Firestore)
 function renderAdminStock() {
     const container = document.getElementById('stock-lista');
+    if (!container) return;
     container.innerHTML = '';
 
     menu.forEach(prod => {
@@ -467,24 +500,26 @@ function renderAdminStock() {
                     <span class="font-bold text-sm text-white block">${prod.nombre}</span>
                     <span class="text-xs text-brand-yellow">$${prod.precio.toLocaleString()}</span>
                 </div>
-                <input type="checkbox" ${disponible ? 'checked' : ''} onchange="toggleDisponibilidad(${prod.id})" class="w-5 h-5 accent-brand-yellow rounded cursor-pointer">
+                <input type="checkbox" ${disponible ? 'checked' : ''} onchange="toggleDisponibilidad('${prod.idFirebase}', ${disponible})" class="w-5 h-5 accent-brand-yellow rounded cursor-pointer">
             </label>
         `;
     });
 }
 
-function toggleDisponibilidad(id) {
-    const prod = menu.find(p => p.id === id);
-    if (prod) {
-        prod.disponible = !prod.disponible;
-        localStorage.setItem('sb_menu', JSON.stringify(menu));
-        renderAdminStock();
+function toggleDisponibilidad(idFirebase, estadoActual) {
+    db.collection("menu").doc(idFirebase).update({
+        disponible: !estadoActual
+    }).then(() => {
+        if (isAdminLoggedIn) renderAdminStock();
         renderProductos();
-    }
+    }).catch((error) => {
+        console.error("Error al actualizar disponibilidad: ", error);
+    });
 }
 
 function renderAdmin() {
     const container = document.getElementById('pedidos-lista');
+    if (!container) return;
     container.innerHTML = '';
 
     if (pedidos.length === 0) {
@@ -558,6 +593,3 @@ function imprimirTicket(id) {
     document.getElementById('print-ticket').innerHTML = ticketContent;
     window.print();
 }
-
-// Inicializar
-renderProductos();
