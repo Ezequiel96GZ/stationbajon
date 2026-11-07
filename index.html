@@ -20,12 +20,11 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Roboto:wght@400;700&display=swap"
         rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Roboto:wght@400;700&display=swap"
-        rel="stylesheet">
 
-    <!-- Firebase App (Core) y Firestore -->
+    <!-- Firebase App (Core), Firestore y AUTH (Nuevo para seguridad) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 </head>
 
 <body class="min-h-screen pb-24 bg-brand-black text-white">
@@ -91,7 +90,6 @@
                 <!-- Categorías -->
                 <div id="menu-categorias" class="mb-6">
                     <div class="flex overflow-x-auto space-x-2 pb-2 scrollbar-none">
-                       
                         <button onclick="filtrarCategoria('hamburguesas')"
                             class="cat-btn bg-brand-darkCard text-gray-300 hover:text-brand-yellow px-4 py-2 rounded-full font-bold text-sm whitespace-nowrap">🍔 Hamburguesas</button>
                         <button onclick="filtrarCategoria('promos')"
@@ -273,7 +271,7 @@
             </div>
         </div>
 
-        <!-- Modal de Login Admin -->
+        <!-- Modal de Login Admin (Modificado para Correo Electrónico) -->
         <div id="modal-login" class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center p-4">
             <div
                 class="bg-brand-darkCard border border-brand-yellow/40 w-full max-w-sm rounded-2xl p-6 shadow-2xl relative">
@@ -285,13 +283,13 @@
                         class="w-12 h-12 bg-brand-yellow text-brand-black rounded-full font-oswald font-bold text-xl flex items-center justify-center mx-auto mb-2">
                         SB</div>
                     <h3 class="font-oswald text-xl text-brand-yellow uppercase">Acceso Comandera</h3>
-                    <p class="text-xs text-gray-400">Ingresa tus credenciales de administrador</p>
+                    <p class="text-xs text-gray-400">Ingresa tu correo de administrador</p>
                 </div>
 
                 <form onsubmit="validarLogin(event)" class="space-y-4">
                     <div>
-                        <label class="text-xs text-gray-400 block mb-1">Usuario</label>
-                        <input type="text" id="admin-user" required placeholder="admin"
+                        <label class="text-xs text-gray-400 block mb-1">Correo electrónico</label>
+                        <input type="email" id="admin-user" required placeholder="admin@stationbajon.com"
                             class="w-full bg-brand-darkInput border border-gray-700 rounded p-2.5 text-sm text-white focus:border-brand-yellow outline-none">
                     </div>
                     <div>
@@ -300,7 +298,7 @@
                             class="w-full bg-brand-darkInput border border-gray-700 rounded p-2.5 text-sm text-white focus:border-brand-yellow outline-none">
                     </div>
 
-                    <p id="login-error" class="text-xs text-red-500 font-bold hidden text-center">Usuario o contraseña incorrectos.</p>
+                    <p id="login-error" class="text-xs text-red-500 font-bold hidden text-center">Correo o contraseña incorrectos.</p>
 
                     <button type="submit"
                         class="w-full bg-brand-yellow hover:bg-brand-darkYellow text-brand-black font-oswald font-bold py-3 rounded-lg uppercase tracking-wider transition">
