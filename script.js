@@ -1,42 +1,4 @@
 
-// NUEVA VALIDACIÓN DE LOGIN USANDO FIREBASE AUTH
-function validarLogin(e) {
-    e.preventDefault();
-    const email = document.getElementById('admin-user').value.trim();
-    const pass = document.getElementById('admin-pass').value.trim();
-
-    // Consulta directa a Firebase Authentication
-    firebase.auth().signInWithEmailAndPassword(email, pass)
-        .then((userCredential) => {
-            isAdminLoggedIn = true;
-            cerrarModalLogin();
-            mostrarVistaAdmin();
-        })
-        .catch((error) => {
-            console.error("Error de autenticación:", error.message);
-            const errorDiv = document.getElementById('login-error');
-            if (errorDiv) {
-                errorDiv.innerText = "Correo o contraseña incorrectos.";
-                errorDiv.classList.remove('hidden');
-            } else {
-                alert("Credenciales inválidas.");
-            }
-        });
-}
-
-// Asegurar el cierre de sesión limpio
-function cerrarSesionAdmin() {
-    firebase.auth().signOut().then(() => {
-        isAdminLoggedIn = false;
-        volverAlMenu();
-        const btnAdmin = document.getElementById('btn-admin-access');
-        if (btnAdmin) btnAdmin.innerText = "🔒 ADMIN";
-        
-        document.getElementById('admin-user').value = "";
-        document.getElementById('admin-pass').value = "";
-    });
-}
-
 // --- CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
     apiKey: "AIzaSyBIY2-3it6w6oU8GYSXBfn4nBFXDwoJUUc",
@@ -55,57 +17,42 @@ const db = firebase.firestore();
 
 // MENÚ BASE DE RESPALDO
 const menuBase = [
-    // 1. HAMBURGUESAS CHEDDAR
     { id: 1, categoria: 'hamburguesas', nombre: 'Cheddar Simple', descripcion: 'Carne, cheddar. Incluye papas fritas.', precio: 8500, disponible: true },
     { id: 2, categoria: 'hamburguesas', nombre: 'Cheddar Doble', descripcion: 'Doble carne, doble cheddar. Incluye papas fritas.', precio: 9500, disponible: true },
     { id: 3, categoria: 'hamburguesas', nombre: 'Cheddar Triple', descripcion: 'Triple carne, triple cheddar. Incluye papas fritas.', precio: 11000, disponible: true },
-
-    // HAMBURGUESAS BACON CHEDDAR
     { id: 4, categoria: 'hamburguesas', nombre: 'Bacon Cheddar Simple', descripcion: 'Carne, cheddar, panceta crocante. Incluye papas fritas.', precio: 8800, disponible: true },
     { id: 5, categoria: 'hamburguesas', nombre: 'Bacon Cheddar Doble', descripcion: 'Doble carne, cheddar, panceta crocante. Incluye papas fritas.', precio: 9800, disponible: true },
     { id: 6, categoria: 'hamburguesas', nombre: 'Bacon Cheddar Triple', descripcion: 'Triple carne, cheddar, panceta crocante. Incluye papas fritas.', precio: 11800, disponible: true },
-
-    // HAMBURGUESAS CLÁSICAS
     { id: 7, categoria: 'hamburguesas', nombre: 'Clásica Simple', descripcion: 'Carne, cheddar, tomate fresco, lechuga. Incluye papas fritas.', precio: 8800, disponible: true },
     { id: 8, categoria: 'hamburguesas', nombre: 'Clásica Doble', descripcion: 'Doble carne, cheddar, tomate fresco, lechuga. Incluye papas fritas.', precio: 9800, disponible: true },
-
-    // HAMBURGUESAS CRISPY
     { id: 9, categoria: 'hamburguesas', nombre: 'Crispy Simple', descripcion: 'Carne, cheddar, cebolla crispy crocante. Incluye papas fritas.', precio: 8800, disponible: true },
     { id: 10, categoria: 'hamburguesas', nombre: 'Crispy Doble', descripcion: 'Doble carne, cheddar, cebolla crispy crocante. Incluye papas fritas.', precio: 9800, disponible: true },
-
-    // HAMBURGUESAS SWEET
     { id: 11, categoria: 'hamburguesas', nombre: 'Sweet Simple', descripcion: 'Carne, cheddar, cebolla caramelizada, panceta. Incluye papas fritas.', precio: 9500, disponible: true },
     { id: 12, categoria: 'hamburguesas', nombre: 'Sweet Doble', descripcion: 'Doble carne, cheddar, cebolla caramelizada, panceta. Incluye papas fritas.', precio: 10500, disponible: true },
     { id: 13, categoria: 'hamburguesas', nombre: 'Sweet Triple', descripcion: 'Triple carne, cheddar, cebolla caramelizada, panceta. Incluye papas fritas.', precio: 12500, disponible: true },
-
-    // 2. PROMOCIONES DE HAMBURGUESAS
     { id: 14, categoria: 'promos', nombre: 'Promo 4 Simple Bacon', descripcion: '4 Hamburguesas Simples con Bacon y Cheddar + Papas Fritas.', precio: 33000, disponible: true },
     { id: 15, categoria: 'promos', nombre: 'Promo 2 Doble Bacon', descripcion: '2 Hamburguesas Dobles con Bacon y Cheddar + Papas Fritas.', precio: 19000, disponible: true },
     { id: 16, categoria: 'promos', nombre: 'Promo 4 Doble Bacon', descripcion: '4 Hamburguesas Dobles con Bacon y Cheddar + Papas Fritas.', precio: 38000, disponible: true },
-
-    // 3. PAPAS FRITAS Y ADICIONALES
     { id: 17, categoria: 'papas', nombre: 'Porción de papas sola', descripcion: 'Porción grande de papas fritas crocantes.', precio: 6000, disponible: true },
     { id: 18, categoria: 'papas', nombre: 'Extra de papas', descripcion: 'Adicional extra de papas fritas.', precio: 3500, disponible: true },
     { id: 19, categoria: 'papas', nombre: 'Topping Cheddar en papas', descripcion: 'Adicional de salsa cheddar derretida sobre las papas.', precio: 1000, disponible: true },
     { id: 20, categoria: 'papas', nombre: 'Topping Bacon en papas', descripcion: 'Adicional de panceta crocante picada sobre las papas.', precio: 1000, disponible: true },
-
-    // 4. SALSAS Y DIPS
     { id: 21, categoria: 'salsas', nombre: 'Dip de cheddar', descripcion: 'Pote individual de cheddar liquido.', precio: 1500, disponible: true },
     { id: 22, categoria: 'salsas', nombre: 'Dip de barbacoa', descripcion: 'Pote individual de salsa barbacoa.', precio: 1500, disponible: true },
     { id: 23, categoria: 'salsas', nombre: 'Dip de alioli', descripcion: 'Pote individual de salsa alioli casera.', precio: 1500, disponible: true },
     { id: 24, categoria: 'salsas', nombre: 'Pileta de cheddar', descripcion: 'Porción abundante de cheddar liquido para bañar todo.', precio: 4500, disponible: true },
-
-    // 5. BEBIDAS
     { id: 25, categoria: 'bebidas', nombre: 'Coca-Cola 500 ml', descripcion: 'Botella de Coca-Cola fría 500ml.', precio: 2000, disponible: true },
     { id: 26, categoria: 'bebidas', nombre: 'Manaos Cola 600 ml', descripcion: 'Botella de Manaos Cola fría 600ml.', precio: 1500, disponible: true }
 ];
 
-// Variables de Estado Globales
+// Variables de Estado Globales y Control de Seguridad
 let localAbierto = true;
 let menu = [];
 let carrito = [];
 let pedidos = [];
 let categoriaActual = 'todas';
+let isAdminLoggedIn = false;
+let isMigrating = false;
 
 // --- INICIALIZACIÓN Y CONEXIÓN CON FIRESTORE ---
 document.addEventListener("DOMContentLoaded", () => {
@@ -128,6 +75,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (fotos.length > 0) fotos[0].classList.add("scale-110");
     if (fotos.length > 1) setInterval(rotarCarruselFotos, tiempoCarrusel);
 
+    // Mantener la sesión activa si se recarga la página
+    firebase.auth().onAuthStateChanged((user) => {
+        isAdminLoggedIn = !!user;
+    });
+
     // 2. Escuchar Estado del Local
     db.collection("configuracion").doc("local").onSnapshot((doc) => {
         if (doc.exists) {
@@ -142,7 +94,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 3. Escuchar Menú en Tiempo Real de Forma Controlada
     db.collection("menu").onSnapshot((snapshot) => {
-        if (isMigrating) return; // Bloquear lecturas múltiples durante la inicialización
+        if (isMigrating) return;
 
         const nuevosProductos = [];
         snapshot.forEach((doc) => {
@@ -151,7 +103,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         menu = nuevosProductos;
 
-        // Carga inicial solo si la base de datos está totalmente vacía
         if (menu.length === 0 && !isMigrating) {
             isMigrating = true;
             const batch = db.batch();
@@ -417,9 +368,9 @@ function enviarAPedidoWhatsApp() {
     });
 }
 
-// LÓGICA DE AUTENTICACIÓN ADMIN
+// --- LÓGICA DE AUTENTICACIÓN ADMIN CON FIREBASE AUTH ---
 function solicitarAccesoAdmin() {
-    if (isAdminLoggedIn) {
+    if (firebase.auth().currentUser || isAdminLoggedIn) {
         mostrarVistaAdmin();
     } else {
         document.getElementById('modal-login').classList.remove('hidden');
@@ -433,16 +384,25 @@ function cerrarModalLogin() {
 
 function validarLogin(e) {
     e.preventDefault();
-    const user = document.getElementById('admin-user').value.trim();
+    const email = document.getElementById('admin-user').value.trim();
     const pass = document.getElementById('admin-pass').value.trim();
 
-    if (user === ADMIN_USER && pass === ADMIN_PASS) {
-        isAdminLoggedIn = true;
-        cerrarModalLogin();
-        mostrarVistaAdmin();
-    } else {
-        document.getElementById('login-error').classList.remove('hidden');
-    }
+    firebase.auth().signInWithEmailAndPassword(email, pass)
+        .then((userCredential) => {
+            isAdminLoggedIn = true;
+            cerrarModalLogin();
+            mostrarVistaAdmin();
+        })
+        .catch((error) => {
+            console.error("Error de autenticación:", error.message);
+            const errorDiv = document.getElementById('login-error');
+            if (errorDiv) {
+                errorDiv.innerText = "Correo o contraseña incorrectos.";
+                errorDiv.classList.remove('hidden');
+            } else {
+                alert("Credenciales inválidas.");
+            }
+        });
 }
 
 function mostrarVistaAdmin() {
@@ -461,11 +421,17 @@ function volverAlMenu() {
 }
 
 function cerrarSesionAdmin() {
-    isAdminLoggedIn = false;
-    volverAlMenu();
-    document.getElementById('btn-admin-access').innerText = "🔒 ADMIN";
-    document.getElementById('admin-user').value = "";
-    document.getElementById('admin-pass').value = "";
+    firebase.auth().signOut().then(() => {
+        isAdminLoggedIn = false;
+        volverAlMenu();
+        const btnAdmin = document.getElementById('btn-admin-access');
+        if (btnAdmin) btnAdmin.innerText = "🔒 ADMIN";
+        
+        const userInput = document.getElementById('admin-user');
+        const passInput = document.getElementById('admin-pass');
+        if (userInput) userInput.value = "";
+        if (passInput) passInput.value = "";
+    });
 }
 
 // NAVEGACIÓN SOLAPAS ADMIN
