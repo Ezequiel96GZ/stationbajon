@@ -1,6 +1,5 @@
 /// Credenciales Predefinidas
-const ADMIN_USER = "admin";
-const ADMIN_PASS = "station123";
+
 let isAdminLoggedIn = false;
 let isMigrating = false;
 
