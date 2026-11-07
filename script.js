@@ -187,9 +187,9 @@ function actualizarBannerLocal() {
     if (!banner) return;
 
     if (localAbierto) {
-        banner.className = "relative w-full text-brand-black py-3 px-5 rounded-xl mb-4 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center bg-brand-yellow";
-        badge.innerText = "HOY SE BAJONEA";
-        titulo.innerText = "Realiza tu pedido online";
+        banner.className = "relative w-full text-brand-black py-3 px-5 rounded-xl mb-4 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center bg-brand-green";
+        badge.innerText = "PEDIDOS NORMALMENTE AL NUMERO WHATSAPP";
+        titulo.innerText = "ESTAMOS TRABAJANDO PARA MEJORAR EL SERVICIO, GRACIAS POR SU PACIENCIA";
         emoji.innerText = "🍔";
     } else {
         banner.className = "relative w-full text-white py-3 px-5 rounded-xl mb-4 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center bg-red-600";
