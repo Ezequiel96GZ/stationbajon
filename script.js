@@ -187,7 +187,7 @@ function actualizarBannerLocal() {
     if (!banner) return;
 
     if (localAbierto) {
-        banner.className = "bg-brand-yellow text-brand-black p-4 rounded-xl mb-6 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center";
+        banner.className = "bg-green-600 text-brand-black p-4 rounded-xl mb-6 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center";
         badge.innerText = "PEDIDOS NORMALMENTE AL NUMERO WHATSAPP";
         titulo.innerText = "ESTAMOS TRABAJANDO PARA MEJORAR EL SERVICIO, GRACIAS POR SU PACIENCIA";
         emoji.innerText = "🍔";
