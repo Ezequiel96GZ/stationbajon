@@ -1,7 +1,41 @@
-/// Credenciales Predefinidas
 
-let isAdminLoggedIn = false;
-let isMigrating = false;
+// NUEVA VALIDACIÓN DE LOGIN USANDO FIREBASE AUTH
+function validarLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('admin-user').value.trim();
+    const pass = document.getElementById('admin-pass').value.trim();
+
+    // Consulta directa a Firebase Authentication
+    firebase.auth().signInWithEmailAndPassword(email, pass)
+        .then((userCredential) => {
+            isAdminLoggedIn = true;
+            cerrarModalLogin();
+            mostrarVistaAdmin();
+        })
+        .catch((error) => {
+            console.error("Error de autenticación:", error.message);
+            const errorDiv = document.getElementById('login-error');
+            if (errorDiv) {
+                errorDiv.innerText = "Correo o contraseña incorrectos.";
+                errorDiv.classList.remove('hidden');
+            } else {
+                alert("Credenciales inválidas.");
+            }
+        });
+}
+
+// Asegurar el cierre de sesión limpio
+function cerrarSesionAdmin() {
+    firebase.auth().signOut().then(() => {
+        isAdminLoggedIn = false;
+        volverAlMenu();
+        const btnAdmin = document.getElementById('btn-admin-access');
+        if (btnAdmin) btnAdmin.innerText = "🔒 ADMIN";
+        
+        document.getElementById('admin-user').value = "";
+        document.getElementById('admin-pass').value = "";
+    });
+}
 
 // --- CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
