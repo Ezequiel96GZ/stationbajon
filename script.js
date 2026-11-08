@@ -219,8 +219,8 @@ function actualizarBannerLocal() {
         emoji.innerText = "🍔";
     } else {
         banner.className = "relative w-full text-white py-3 px-5 rounded-xl mb-4 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center bg-red-600";
-        badge.innerText = "PEDIDOS NORMALMENTE AL NUMERO WHATSAPP";
-        titulo.innerText = "ESTAMOS TRABAJANDO PARA MEJORAR EL SERVICIO, GRACIAS POR SU PACIENCIA";
+        badge.innerText = "LOCAL CERRADO";
+        titulo.innerText = "¿TE QUEDASTE CON GANAS? ¡¡VOLVEREMOS ABRIR A LAS 19HS!!";
         emoji.innerText = "🚫";
     }
 }
