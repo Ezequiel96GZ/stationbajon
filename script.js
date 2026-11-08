@@ -334,7 +334,7 @@ function cambiarTipoEntrega() {
 }
 
 // Envío de Pedido a Firestore y WhatsApp
-async function enviarAPedidoWhatsApp() {
+function enviarAPedidoWhatsApp() {
     if (isSubmitting) return;
 
     if (!localAbierto) {
@@ -385,39 +385,29 @@ async function enviarAPedidoWhatsApp() {
         btnEnviar.innerText = "PROCESANDO...";
     }
 
-    try {
-        // Obtenemos el número secuencial más alto registrado o contaremos documentos existentes
-        const snapshot = await db.collection("pedidos").get();
-        let maxSecuencial = 0;
-        snapshot.forEach(doc => {
-            const sec = doc.data().idOrdenSecuencial || 0;
-            if (sec > maxSecuencial) maxSecuencial = sec;
-        });
+    const numeroSecuencial = pedidos.length + 1;
+    const numeroOrdenFormateado = "ORD-" + String(numeroSecuencial).padStart(4, '0');
 
-        const numeroSecuencial = maxSecuencial + 1;
-        const numeroOrdenFormateado = "ORD-" + String(numeroSecuencial).padStart(4, '0');
+    const ahora = new Date();
+    const fechaFormateada = ahora.toLocaleDateString('es-AR');
+    const horaFormateada = ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    const fechaCompletaStr = `${fechaFormateada} - ${horaFormateada} hs`;
 
-        const ahora = new Date();
-        const fechaFormateada = ahora.toLocaleDateString('es-AR');
-        const horaFormateada = ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-        const fechaCompletaStr = `${fechaFormateada} - ${horaFormateada} hs`;
+    const nuevoPedido = {
+        id: Date.now(),
+        idOrdenSecuencial: numeroSecuencial,
+        numeroOrden: numeroOrdenFormateado,
+        fecha: fechaCompletaStr,
+        cliente: nombre,
+        tipo: tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️',
+        direccion: tipo === 'delivery' ? direccion : 'Retira en local',
+        pago: pago,
+        notas: notas,
+        items: [...carrito],
+        total: total
+    };
 
-        const nuevoPedido = {
-            id: Date.now(),
-            idOrdenSecuencial: numeroSecuencial,
-            numeroOrden: numeroOrdenFormateado,
-            fecha: fechaCompletaStr,
-            cliente: nombre,
-            tipo: tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️',
-            direccion: tipo === 'delivery' ? direccion : 'Retira en local',
-            pago: pago,
-            notas: notas,
-            items: [...carrito],
-            total: total
-        };
-
-        await db.collection("pedidos").add(nuevoPedido);
-
+    db.collection("pedidos").add(nuevoPedido).then(() => {
         let msj = `*--- NUEVO PEDIDO (${numeroOrdenFormateado}) - STATION BAJÓN ---*\n`;
         msj += `*Cliente:* ${nombre}\n`;
         msj += `*Modalidad:* ${tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️'}\n`;
@@ -452,16 +442,21 @@ async function enviarAPedidoWhatsApp() {
 
         window.open(url, '_blank');
 
-    } catch (error) {
-        console.error("Error al registrar el pedido: ", error);
-        alert("Hubo un error al enviar el pedido a la base de datos.");
-    } finally {
         isSubmitting = false;
         if (btnEnviar) {
             btnEnviar.style.opacity = "1";
             btnEnviar.innerText = "ENVIAR PEDIDO POR WHATSAPP";
         }
-    }
+    }).catch((error) => {
+        console.error("Error al registrar el pedido: ", error);
+        alert("Hubo un error al enviar el pedido a la base de datos.");
+        
+        isSubmitting = false;
+        if (btnEnviar) {
+            btnEnviar.style.opacity = "1";
+            btnEnviar.innerText = "ENVIAR PEDIDO POR WHATSAPP";
+        }
+    });
 }
 
 // --- AUTENTICACIÓN ADMIN ---
@@ -575,21 +570,15 @@ function toggleEstadoLocal() {
     });
 }
 
-// Limpiar comandera borrando físicamente la colección en lote para reiniciar contador a ORD-0001
-async function limpiarComandera() {
-    if (confirm("¿Estás seguro de borrar todos los pedidos de la base de datos? Esto reiniciará el número de orden a ORD-0001.")) {
-        try {
-            const querySnapshot = await db.collection("pedidos").get();
-            const batch = db.batch();
+function limpiarComandera() {
+    if (confirm("¿Estás seguro de borrar todos los pedidos de la base de datos?")) {
+        db.collection("pedidos").get().then((querySnapshot) => {
             querySnapshot.forEach((doc) => {
-                batch.delete(doc.ref);
+                db.collection("pedidos").doc(doc.id).delete();
             });
-            await batch.commit();
-            console.log("Comandera limpiada con éxito.");
-        } catch (error) {
+        }).catch((error) => {
             console.error("Error al limpiar la comandera: ", error);
-            alert("No tienes permisos o ocurrió un error al limpiar la comandera.");
-        }
+        });
     }
 }
 
@@ -1024,36 +1013,6 @@ function guardarProducto(e) {
     }
 }
 
-try {
-        // En lugar de hacer un db.collection("pedidos").get(), usamos la cantidad de pedidos en memoria local + 1
-        // o si es la vista del cliente, un timestamp corto para asegurar un número único sin leer la BD.
-        const numeroSecuencial = (pedidos && pedidos.length > 0) 
-            ? Math.max(...pedidos.map(p => p.idOrdenSecuencial || 0)) + 1 
-            : 1;
-
-        const numeroOrdenFormateado = "ORD-" + String(numeroSecuencial).padStart(4, '0');
-
-        const ahora = new Date();
-        const fechaFormateada = ahora.toLocaleDateString('es-AR');
-        const horaFormateada = ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-        const fechaCompletaStr = `${fechaFormateada} - ${horaFormateada} hs`;
-
-        const nuevoPedido = {
-            id: Date.now(),
-            idOrdenSecuencial: numeroSecuencial,
-            numeroOrden: numeroOrdenFormateado,
-            fecha: fechaCompletaStr,
-            cliente: nombre,
-            tipo: tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️',
-            direccion: tipo === 'delivery' ? direccion : 'Retira en local',
-            pago: pago,
-            notas: notas,
-            items: [...carrito],
-            total: total
-        };
-
-        await db.collection("pedidos").add(nuevoPedido);
-
 // Impresión en Comandera Térmica
 function imprimirTicket(idFirebase) {
     const p = pedidos.find(item => item.idFirebase === idFirebase);
@@ -1086,3 +1045,4 @@ function imprimirTicket(idFirebase) {
     document.getElementById('print-ticket').innerHTML = ticketContent;
     window.print();
 }
+
