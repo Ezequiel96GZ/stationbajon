@@ -39,3 +39,24 @@ body {
         size: auto;
     }
 }
+
+/* Animación de marquesina continua */
+@keyframes marquee {
+    0% {
+        transform: translateX(0%);
+    }
+    100% {
+        transform: translateX(-50%);
+    }
+}
+
+.animate-marquee {
+    display: inline-block;
+    white-space: nowrap;
+    animation: marquee 20s linear infinite;
+}
+
+/* Pausa suave al pasar el mouse por encima (opcional pero muy práctico) */
+.animate-marquee:hover {
+    animation-play-state: paused;
+}
