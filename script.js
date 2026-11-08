@@ -1024,6 +1024,36 @@ function guardarProducto(e) {
     }
 }
 
+try {
+        // En lugar de hacer un db.collection("pedidos").get(), usamos la cantidad de pedidos en memoria local + 1
+        // o si es la vista del cliente, un timestamp corto para asegurar un número único sin leer la BD.
+        const numeroSecuencial = (pedidos && pedidos.length > 0) 
+            ? Math.max(...pedidos.map(p => p.idOrdenSecuencial || 0)) + 1 
+            : 1;
+
+        const numeroOrdenFormateado = "ORD-" + String(numeroSecuencial).padStart(4, '0');
+
+        const ahora = new Date();
+        const fechaFormateada = ahora.toLocaleDateString('es-AR');
+        const horaFormateada = ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        const fechaCompletaStr = `${fechaFormateada} - ${horaFormateada} hs`;
+
+        const nuevoPedido = {
+            id: Date.now(),
+            idOrdenSecuencial: numeroSecuencial,
+            numeroOrden: numeroOrdenFormateado,
+            fecha: fechaCompletaStr,
+            cliente: nombre,
+            tipo: tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️',
+            direccion: tipo === 'delivery' ? direccion : 'Retira en local',
+            pago: pago,
+            notas: notas,
+            items: [...carrito],
+            total: total
+        };
+
+        await db.collection("pedidos").add(nuevoPedido);
+
 // Impresión en Comandera Térmica
 function imprimirTicket(idFirebase) {
     const p = pedidos.find(item => item.idFirebase === idFirebase);
