@@ -1,6 +1,16 @@
+// Detectar si estás trabajando en tu computadora (Local) o en la web real (Vercel)
+const esLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.protocol === "file:";
 
-// --- CONFIGURACIÓN DE FIREBASE ---
-const firebaseConfig = {
+const firebaseConfig = esLocal ? {
+    // 🧪 PROYECTO DE PRUEBAS (station-pruebas)
+    apiKey: "AIzaSyDEUc4s4Jac7waxPueOxApw3dF_nxfacb4",
+    authDomain: "station-pruebas.firebaseapp.com",
+    projectId: "station-pruebas",
+    storageBucket: "station-pruebas.fireapp.com",
+    messagingSenderId: "293103559921",
+    appId: "1:293103559921:web:135fe793b0103b821a3550"
+} : {
+    // 🚀 PROYECTO REAL DE PRODUCCIÓN (Station Bajon)
     apiKey: "AIzaSyBIY2-3it6w6oU8GYSXBfn4nBFXDwoJUUc",
     authDomain: "station-bajon.firebaseapp.com",
     projectId: "station-bajon",
@@ -53,6 +63,13 @@ let pedidos = [];
 let categoriaActual = 'todas';
 let isAdminLoggedIn = false;
 let isMigrating = false;
+
+// Variable de control de seguridad para evitar duplicaciones por clic múltiple
+let isSubmitting = false;
+
+// Variables temporales para la edición de pedidos interactiva
+let pedidoEnEdicionItems = [];
+let pedidoEnEdicionId = null;
 
 // --- INICIALIZACIÓN Y CONEXIÓN CON FIRESTORE ---
 document.addEventListener("DOMContentLoaded", () => {
@@ -120,23 +137,47 @@ document.addEventListener("DOMContentLoaded", () => {
         if (isAdminLoggedIn) renderAdminStock();
     });
 
-    // 4. Escuchar Pedidos / Comandera
-    db.collection("pedidos").orderBy("id", "desc").onSnapshot((snapshot) => {
+    // 4. Escuchar Pedidos / Comandera (Ordenados del más reciente al más antiguo)
+    db.collection("pedidos").orderBy("idOrdenSecuencial", "desc").onSnapshot((snapshot) => {
         pedidos = [];
         snapshot.forEach((doc) => {
             pedidos.push({ idFirebase: doc.id, ...doc.data() });
         });
+        
+        calcularResumenVentasDia(pedidos);
         if (isAdminLoggedIn) renderAdmin();
     });
 });
 
-// Render Menú Cliente
+// Render Menú Cliente (Ordenado Simples -> Dobles -> Triples)
 function renderProductos(categoria = categoriaActual) {
     categoriaActual = categoria;
     const grid = document.getElementById('productos-grid');
     if (!grid) return;
     grid.innerHTML = '';
-    const filtrados = categoria === 'todas' ? menu : menu.filter(p => p.categoria === categoria);
+    
+    let filtrados = categoria === 'todas' ? [...menu] : menu.filter(p => p.categoria === categoria);
+
+    filtrados.sort((a, b) => {
+        const nombreA = (a.nombre || "").toLowerCase();
+        const nombreB = (b.nombre || "").toLowerCase();
+
+        const obtenerPeso = (nombre) => {
+            if (nombre.includes('simple')) return 1;
+            if (nombre.includes('doble')) return 2;
+            if (nombre.includes('triple')) return 3;
+            return 4; 
+        };
+
+        const pesoA = obtenerPeso(nombreA);
+        const pesoB = obtenerPeso(nombreB);
+
+        if (pesoA === pesoB) {
+            return nombreA.localeCompare(nombreB);
+        }
+
+        return pesoA - pesoB;
+    });
 
     actualizarBannerLocal();
 
@@ -173,8 +214,8 @@ function actualizarBannerLocal() {
 
     if (localAbierto) {
         banner.className = "bg-green-600 text-brand-black p-4 rounded-xl mb-6 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center";
-        badge.innerText = "PEDIDOS NORMALMENTE AL NUMERO WHATSAPP";
-        titulo.innerText = "ESTAMOS TRABAJANDO PARA MEJORAR EL SERVICIO, GRACIAS POR SU PACIENCIA";
+        badge.innerText = "¿ESTAS DE BAJON?";
+        titulo.innerText = "REALIZA TU PEDIDO ONLINE";
         emoji.innerText = "🍔";
     } else {
         banner.className = "relative w-full text-white py-3 px-5 rounded-xl mb-4 font-oswald uppercase tracking-wide shadow-md flex justify-between items-center bg-red-600";
@@ -256,6 +297,7 @@ function toggleCarritoModal() {
 
 function renderModalCarrito() {
     const container = document.getElementById('modal-carrito-items');
+    if (!container) return;
     container.innerHTML = '';
     let total = 0;
 
@@ -266,12 +308,12 @@ function renderModalCarrito() {
         container.innerHTML += `
             <div class="flex justify-between items-center pt-2">
                 <div>
-                    <h5 class="font-bold text-sm">${item.nombre}</h5>
+                    <h5 class="font-bold text-sm text-white">${item.nombre}</h5>
                     <span class="text-xs text-brand-yellow font-bold">$${item.precio.toLocaleString()} c/u</span>
                 </div>
                 <div class="flex items-center space-x-2">
                     <button onclick="modificarCantidad('${item.idFirebase}', -1)" class="w-6 h-6 bg-gray-800 text-white rounded font-bold text-xs">-</button>
-                    <span class="text-sm font-bold w-4 text-center">${item.cantidad}</span>
+                    <span class="text-sm font-bold w-4 text-center text-white">${item.cantidad}</span>
                     <button onclick="modificarCantidad('${item.idFirebase}', 1)" class="w-6 h-6 bg-brand-yellow text-brand-black rounded font-bold text-xs">+</button>
                 </div>
             </div>
@@ -293,8 +335,15 @@ function cambiarTipoEntrega() {
 
 // Envío de Pedido a Firestore y WhatsApp
 function enviarAPedidoWhatsApp() {
+    if (isSubmitting) return;
+
     if (!localAbierto) {
         alert("El local cerró. No se pueden procesar nuevos pedidos.");
+        return;
+    }
+
+    if (!carrito || carrito.length === 0) {
+        alert("Tu carrito está vacío. Agrega productos antes de enviar el pedido.");
         return;
     }
 
@@ -322,11 +371,33 @@ function enviarAPedidoWhatsApp() {
     }
 
     const total = carrito.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
-    const pedidoId = Date.now();
+    
+    if (total <= 0) {
+        alert("El total del pedido no puede ser $0.");
+        return;
+    }
+
+    isSubmitting = true;
+
+    const btnEnviar = document.querySelector('button[onclick*="enviarAPedidoWhatsApp"]');
+    if (btnEnviar) {
+        btnEnviar.style.opacity = "0.5";
+        btnEnviar.innerText = "PROCESANDO...";
+    }
+
+    const numeroSecuencial = pedidos.length + 1;
+    const numeroOrdenFormateado = "ORD-" + String(numeroSecuencial).padStart(4, '0');
+
+    const ahora = new Date();
+    const fechaFormateada = ahora.toLocaleDateString('es-AR');
+    const horaFormateada = ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    const fechaCompletaStr = `${fechaFormateada} - ${horaFormateada} hs`;
 
     const nuevoPedido = {
-        id: pedidoId,
-        fecha: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        id: Date.now(),
+        idOrdenSecuencial: numeroSecuencial,
+        numeroOrden: numeroOrdenFormateado,
+        fecha: fechaCompletaStr,
         cliente: nombre,
         tipo: tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️',
         direccion: tipo === 'delivery' ? direccion : 'Retira en local',
@@ -337,7 +408,7 @@ function enviarAPedidoWhatsApp() {
     };
 
     db.collection("pedidos").add(nuevoPedido).then(() => {
-        let msj = `*--- NUEVO PEDIDO - STATION BAJÓN ---*\n`;
+        let msj = `*--- NUEVO PEDIDO (${numeroOrdenFormateado}) - STATION BAJÓN ---*\n`;
         msj += `*Cliente:* ${nombre}\n`;
         msj += `*Modalidad:* ${tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️'}\n`;
         if (tipo === 'delivery') {
@@ -359,16 +430,36 @@ function enviarAPedidoWhatsApp() {
 
         carrito = [];
         actualizarCarritoUI();
-        toggleCarritoModal();
+
+        const modalCarrito = document.getElementById('modal-carrito');
+        if (modalCarrito) {
+            modalCarrito.classList.add('hidden');
+        }
+
+        document.getElementById('cliente-nombre').value = '';
+        if (document.getElementById('cliente-direccion')) document.getElementById('cliente-direccion').value = '';
+        if (document.getElementById('cliente-notas')) document.getElementById('cliente-notas').value = '';
 
         window.open(url, '_blank');
+
+        isSubmitting = false;
+        if (btnEnviar) {
+            btnEnviar.style.opacity = "1";
+            btnEnviar.innerText = "ENVIAR PEDIDO POR WHATSAPP";
+        }
     }).catch((error) => {
         console.error("Error al registrar el pedido: ", error);
         alert("Hubo un error al enviar el pedido a la base de datos.");
+        
+        isSubmitting = false;
+        if (btnEnviar) {
+            btnEnviar.style.opacity = "1";
+            btnEnviar.innerText = "ENVIAR PEDIDO POR WHATSAPP";
+        }
     });
 }
 
-// --- LÓGICA DE AUTENTICACIÓN ADMIN CON FIREBASE AUTH ---
+// --- AUTENTICACIÓN ADMIN ---
 function solicitarAccesoAdmin() {
     if (firebase.auth().currentUser || isAdminLoggedIn) {
         mostrarVistaAdmin();
@@ -388,7 +479,7 @@ function validarLogin(e) {
     const pass = document.getElementById('admin-pass').value.trim();
 
     firebase.auth().signInWithEmailAndPassword(email, pass)
-        .then((userCredential) => {
+        .then(() => {
             isAdminLoggedIn = true;
             cerrarModalLogin();
             mostrarVistaAdmin();
@@ -491,7 +582,7 @@ function limpiarComandera() {
     }
 }
 
-// RENDER DE CONTROL DE STOCK EN ADMIN
+// RENDER DE CONTROL DE STOCK Y EDICIÓN DE PRODUCTOS EN ADMIN
 function renderAdminStock() {
     const container = document.getElementById('stock-lista');
     if (!container) return;
@@ -500,13 +591,25 @@ function renderAdminStock() {
     menu.forEach(prod => {
         const disponible = prod.disponible !== false;
         container.innerHTML += `
-            <label class="flex items-center justify-between p-3 bg-brand-darkInput border border-gray-800 rounded-lg cursor-pointer hover:border-brand-yellow/50 transition">
-                <div>
+            <div class="flex items-center justify-between p-3 bg-brand-darkInput border border-gray-800 rounded-lg">
+                <div class="flex-1 pr-2">
                     <span class="font-bold text-sm text-white block">${prod.nombre}</span>
-                    <span class="text-xs text-brand-yellow">$${prod.precio.toLocaleString()}</span>
+                    <span class="text-xs text-amber-400 font-bold">$${prod.precio.toLocaleString()}</span>
                 </div>
-                <input type="checkbox" ${disponible ? 'checked' : ''} onchange="toggleDisponibilidad('${prod.idFirebase}', ${disponible})" class="w-5 h-5 accent-brand-yellow rounded cursor-pointer">
-            </label>
+
+                <div class="flex items-center gap-1.5">
+                    <button onclick="cambiarPrecioProducto('${prod.idFirebase}', ${prod.precio})" class="bg-neutral-700 hover:bg-neutral-600 text-amber-400 p-1.5 rounded text-xs font-bold transition" title="Cambiar precio">
+                        ✏️ $
+                    </button>
+                    <button onclick="editarProductoCompleto('${prod.idFirebase}')" class="bg-neutral-700 hover:bg-neutral-600 text-white p-1.5 rounded text-xs font-bold transition" title="Editar producto">
+                        📝
+                    </button>
+                    <button onclick="borrarProducto('${prod.idFirebase}', '${prod.nombre.replace(/'/g, "\\'")}')" class="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white p-1.5 rounded text-xs font-bold transition border border-red-500/30" title="Borrar producto">
+                        🗑️
+                    </button>
+                    <input type="checkbox" ${disponible ? 'checked' : ''} onchange="toggleDisponibilidad('${prod.idFirebase}', ${disponible})" class="w-5 h-5 accent-brand-yellow rounded cursor-pointer ml-1" title="Pausar / Activar stock">
+                </div>
+            </div>
         `;
     });
 }
@@ -522,6 +625,235 @@ function toggleDisponibilidad(idFirebase, estadoActual) {
     });
 }
 
+// BORRAR PEDIDO
+function borrarPedido(idFirebase) {
+    if (confirm("¿Estás seguro de eliminar este pedido de la comandera?")) {
+        db.collection("pedidos").doc(idFirebase).delete().then(() => {
+            console.log("Pedido eliminado correctamente.");
+        }).catch((error) => {
+            console.error("Error al eliminar el pedido:", error);
+            alert("No tienes permisos o ocurrió un error al borrar.");
+        });
+    }
+}
+
+// --- EDICIÓN INTERACTIVA DE PEDIDOS DESDE LA COMANDERA ---
+function modificarPedido(idFirebase) {
+    const pedido = pedidos.find(p => p.idFirebase === idFirebase);
+    if (!pedido) return;
+
+    pedidoEnEdicionId = idFirebase;
+    pedidoEnEdicionItems = JSON.parse(JSON.stringify(pedido.items || []));
+
+    const elNroOrden = document.getElementById('edit-nro-orden');
+    if (elNroOrden) elNroOrden.innerText = `(${pedido.numeroOrden || 'ORD'})`;
+
+    const elCliente = document.getElementById('edit-cliente');
+    if (elCliente) elCliente.value = pedido.cliente || "";
+
+    const elDireccion = document.getElementById('edit-direccion');
+    if (elDireccion) elDireccion.value = pedido.direccion || "";
+
+    const elNotas = document.getElementById('edit-notas');
+    if (elNotas) elNotas.value = pedido.notas || "";
+
+    const selectMenu = document.getElementById('select-agregar-item');
+    if (selectMenu) {
+        selectMenu.innerHTML = `<option value="" disabled selected>+ Agregar producto...</option>`;
+        menu.forEach(prod => {
+            selectMenu.innerHTML += `<option value="${prod.idFirebase}">${prod.nombre} ($${prod.precio.toLocaleString()})</option>`;
+        });
+    }
+
+    renderizarItemsEdicionModal();
+    
+    const modalEditar = document.getElementById('modal-editar-pedido');
+    if (modalEditar) {
+        modalEditar.classList.remove('hidden');
+    }
+}
+
+function cerrarModalEditarPedido() {
+    const modalEditar = document.getElementById('modal-editar-pedido');
+    if (modalEditar) modalEditar.classList.add('hidden');
+    pedidoEnEdicionId = null;
+    pedidoEnEdicionItems = [];
+}
+
+function cambiarCantidadItemEdicion(index, cambio) {
+    pedidoEnEdicionItems[index].cantidad += cambio;
+    if (pedidoEnEdicionItems[index].cantidad <= 0) {
+        pedidoEnEdicionItems.splice(index, 1);
+    }
+    renderizarItemsEdicionModal();
+}
+
+function agregarItemEdicion(selectElement) {
+    const idFirebase = selectElement.value;
+    if (!idFirebase) return;
+
+    const productoMenu = menu.find(m => m.idFirebase === idFirebase);
+    if (!productoMenu) return;
+
+    const existente = pedidoEnEdicionItems.find(i => i.idFirebase === idFirebase || i.nombre === productoMenu.nombre);
+    if (existente) {
+        existente.cantidad += 1;
+    } else {
+        pedidoEnEdicionItems.push({
+            idFirebase: productoMenu.idFirebase,
+            nombre: productoMenu.nombre,
+            precio: productoMenu.precio,
+            cantidad: 1
+        });
+    }
+
+    selectElement.value = "";
+    renderizarItemsEdicionModal();
+}
+
+function renderizarItemsEdicionModal() {
+    const container = document.getElementById('edit-items-lista');
+    if (!container) return;
+    container.innerHTML = '';
+
+    let totalCalculado = 0;
+
+    if (pedidoEnEdicionItems.length === 0) {
+        container.innerHTML = `<p class="text-gray-500 text-xs italic text-center py-2">No hay ítems en este pedido.</p>`;
+        const elTotalVisual = document.getElementById('edit-total-visual');
+        if (elTotalVisual) elTotalVisual.innerText = `$0`;
+        return;
+    }
+
+    pedidoEnEdicionItems.forEach((item, index) => {
+        const subtotal = (item.precio || 0) * (item.cantidad || 1);
+        totalCalculado += subtotal;
+
+        container.innerHTML += `
+            <div class="flex justify-between items-center pt-2 pb-2">
+                <div>
+                    <h5 class="font-bold text-xs text-white">${item.nombre}</h5>
+                    <span class="text-[11px] text-amber-400 font-bold">$${(item.precio || 0).toLocaleString()} c/u</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button type="button" onclick="cambiarCantidadItemEdicion(${index}, -1)" class="w-6 h-6 bg-neutral-800 text-white rounded font-bold text-xs hover:bg-neutral-700">-</button>
+                    <span class="text-xs font-bold w-4 text-center text-white">${item.cantidad}</span>
+                    <button type="button" onclick="cambiarCantidadItemEdicion(${index}, 1)" class="w-6 h-6 bg-amber-400 text-black rounded font-bold text-xs hover:bg-amber-500">+</button>
+                </div>
+            </div>
+        `;
+    });
+
+    const elTotalVisual = document.getElementById('edit-total-visual');
+    if (elTotalVisual) elTotalVisual.innerText = `$${totalCalculado.toLocaleString()}`;
+}
+
+function guardarEdicionPedidoCompleto() {
+    if (!pedidoEnEdicionId) return;
+
+    const clienteInput = document.getElementById('edit-cliente');
+    const direccionInput = document.getElementById('edit-direccion');
+    const notasInput = document.getElementById('edit-notas');
+
+    const cliente = clienteInput ? clienteInput.value.trim() : "";
+    const direccion = direccionInput ? direccionInput.value.trim() : "";
+    const notas = notasInput ? notasInput.value.trim() : "";
+
+    if (!cliente) {
+        alert("Por favor completa el nombre del cliente.");
+        return;
+    }
+
+    if (pedidoEnEdicionItems.length === 0) {
+        alert("El pedido debe contener al menos un producto.");
+        return;
+    }
+
+    const totalFinal = pedidoEnEdicionItems.reduce((sum, item) => sum + ((item.precio || 0) * (item.cantidad || 1)), 0);
+
+    db.collection("pedidos").doc(pedidoEnEdicionId).update({
+        cliente: cliente,
+        direccion: direccion,
+        notas: notas,
+        items: pedidoEnEdicionItems,
+        total: totalFinal,
+        modificado: true // 👈 Marca distintiva para la comandera
+    }).then(() => {
+        cerrarModalEditarPedido();
+        alert("¡Pedido actualizado con éxito!");
+    }).catch((error) => {
+        console.error("Error al actualizar el pedido:", error);
+        alert("Ocurrió un error al actualizar en la base de datos.");
+    });
+}
+
+function borrarProducto(idFirebase, nombreProducto) {
+    if (confirm(`¿Estás seguro de que deseas eliminar permanentemente "${nombreProducto}" del menú?`)) {
+        db.collection("menu").doc(idFirebase).delete().then(() => {
+            console.log("Producto eliminado del menú.");
+            alert("Producto eliminado con éxito.");
+        }).catch((error) => {
+            console.error("Error al eliminar el producto:", error);
+            alert("Ocurrió un error al intentar eliminar el producto.");
+        });
+    }
+}
+
+// RESUMEN DE VENTAS DEL DÍA (Ordenado de mayor a menor venta)
+function calcularResumenVentasDia(pedidosArray) {
+    let totalRecaudado = 0;
+    const conteoItems = {};
+
+    if (!pedidosArray || !Array.isArray(pedidosArray)) return;
+
+    pedidosArray.forEach(pedido => {
+        const esCancelado = pedido.estado === 'cancelado' || pedido.cancelado === true;
+
+        if (!esCancelado) {
+            totalRecaudado += Number(pedido.total) || 0;
+
+            if (pedido.items && Array.isArray(pedido.items)) {
+                pedido.items.forEach(item => {
+                    const nombre = item.nombre || 'Producto sin nombre';
+                    const cantidad = Number(item.cantidad) || 1;
+
+                    if (!conteoItems[nombre]) {
+                        conteoItems[nombre] = 0;
+                    }
+                    conteoItems[nombre] += cantidad;
+                });
+            }
+        }
+    });
+
+    const elTotal = document.getElementById('admin-total-recaudado');
+    if (elTotal) {
+        elTotal.textContent = `$${totalRecaudado.toLocaleString()}`;
+    }
+
+    const elLista = document.getElementById('admin-lista-hamburguesas');
+    if (elLista) {
+        elLista.innerHTML = '';
+        
+        const itemsOrdenados = Object.keys(conteoItems)
+            .map(nombre => ({ nombre: nombre, cantidad: conteoItems[nombre] }))
+            .sort((a, b) => b.cantidad - a.cantidad);
+
+        if (itemsOrdenados.length === 0) {
+            elLista.innerHTML = '<li class="text-gray-500 italic">No hay ventas registradas hoy.</li>';
+            return;
+        }
+
+        itemsOrdenados.forEach(item => {
+            const li = document.createElement('li');
+            li.className = "flex justify-between border-b border-neutral-800 pb-1 items-center";
+            li.innerHTML = `<span class="text-gray-200">🍔 ${item.nombre}</span> <span class="font-bold text-amber-400">${item.cantidad} un.</span>`;
+            elLista.appendChild(li);
+        });
+    }
+}
+
+// RENDER DE COMANDERA (Con distinción de pedidos modificados)
 function renderAdmin() {
     const container = document.getElementById('pedidos-lista');
     if (!container) return;
@@ -534,19 +866,34 @@ function renderAdmin() {
 
     pedidos.forEach(p => {
         let itemsHtml = p.items.map(i => `<li class="text-sm">• ${i.cantidad}x ${i.nombre} ($${(i.precio * i.cantidad).toLocaleString()})</li>`).join('');
+        const numeroOrdenMostrado = p.numeroOrden || `ORD-${String(p.idOrdenSecuencial || 1).padStart(4, '0')}`;
+
+        const esModificado = p.modificado === true;
+        const claseBorde = esModificado ? 'border-blue-500 shadow-blue-900/20 shadow-lg' : 'border-brand-yellow/30';
+        const badgeModificado = esModificado ? `<span class="bg-blue-600/30 text-blue-400 border border-blue-500/40 text-[10px] px-2 py-0.5 rounded font-bold uppercase ml-2">⚠️ Modificado</span>` : '';
 
         container.innerHTML += `
-            <div class="bg-brand-darkCard border border-brand-yellow/30 rounded-xl p-4 space-y-3">
-                <div class="flex justify-between items-start border-b border-gray-800 pb-2">
+            <div class="bg-brand-darkCard border ${claseBorde} rounded-xl p-4 space-y-3 relative">
+                <div class="absolute top-4 right-4 flex gap-1.5">
+                    <button onclick="modificarPedido('${p.idFirebase}')" class="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-lg text-xs transition" title="Modificar pedido">
+                        ✏️
+                    </button>
+                    <button onclick="borrarPedido('${p.idFirebase}')" class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-lg text-xs transition" title="Borrar pedido">
+                        ❌
+                    </button>
+                </div>
+
+                <div class="flex justify-between items-start border-b border-gray-800 pb-2 pr-20">
                     <div>
-                        <span class="font-oswald text-brand-yellow text-lg font-bold">#${p.id.toString().slice(-4)}</span>
-                        <span class="text-xs text-gray-400 ml-2">${p.fecha}</span>
+                        <span class="font-oswald text-brand-yellow text-lg font-bold">${numeroOrdenMostrado}</span>
+                        <span class="text-xs text-gray-400 ml-2">🕒 ${p.fecha}</span>
+                        ${badgeModificado}
                         <h4 class="font-bold text-white text-base">${p.cliente}</h4>
                     </div>
-                    <span class="bg-brand-yellow text-brand-black text-xs px-2 py-1 rounded font-bold uppercase">${p.tipo}</span>
                 </div>
 
                 <div class="text-xs text-gray-300 space-y-1">
+                    <p><strong>Modalidad:</strong> ${p.tipo}</p>
                     <p><strong>Dirección:</strong> ${p.direccion}</p>
                     <p><strong>Método de pago:</strong> ${p.pago}</p>
                     ${p.notas ? `<p class="text-brand-yellow"><strong>Notas:</strong> ${p.notas}</p>` : ''}
@@ -558,7 +905,7 @@ function renderAdmin() {
 
                 <div class="flex justify-between items-center pt-2">
                     <span class="font-oswald text-xl text-brand-yellow font-bold">Total: $${p.total.toLocaleString()}</span>
-                    <button onclick="imprimirTicket(${p.id})" class="bg-white hover:bg-gray-200 text-black px-4 py-2 rounded-lg font-bold font-oswald text-xs uppercase flex items-center gap-1 transition">
+                    <button onclick="imprimirTicket('${p.idFirebase}')" class="bg-white hover:bg-gray-200 text-black px-4 py-2 rounded-lg font-bold font-oswald text-xs uppercase flex items-center gap-1 transition">
                         🖨️ Imprimir Comanda
                     </button>
                 </div>
@@ -567,18 +914,118 @@ function renderAdmin() {
     });
 }
 
+// Activar Categoría
+function activarCategoria(elementoBtn, categoria) {
+    const botones = document.querySelectorAll('.cat-btn');
+    botones.forEach(btn => {
+        btn.style.backgroundColor = "";
+        btn.style.color = "";
+        btn.classList.remove('bg-amber-400', 'text-black');
+        btn.classList.add('bg-neutral-800', 'text-gray-300');
+    });
+
+    elementoBtn.classList.remove('bg-neutral-800', 'text-gray-300');
+    elementoBtn.style.backgroundColor = "#FBBF24";
+    elementoBtn.style.color = "#000000";
+
+    filtrarCategoria(categoria);
+}
+
+// GESTIÓN DE PRODUCTOS ADMIN
+function abrirModalNuevoProducto() {
+    document.getElementById('modal-producto-titulo').innerText = "Agregar Producto";
+    document.getElementById('prod-id-firebase').value = "";
+    document.getElementById('prod-nombre').value = "";
+    document.getElementById('prod-categoria').value = "hamburguesas";
+    document.getElementById('prod-precio').value = "";
+    document.getElementById('prod-descripcion').value = "";
+    document.getElementById('modal-producto').classList.remove('hidden');
+}
+
+function cerrarModalProducto() {
+    document.getElementById('modal-producto').classList.add('hidden');
+}
+
+function cambiarPrecioProducto(idFirebase, precioActual) {
+    const nuevoPrecioStr = prompt("Ingrese el nuevo precio para el producto:", precioActual);
+    if (nuevoPrecioStr === null) return;
+
+    const nuevoPrecio = Number(nuevoPrecioStr);
+    if (isNaN(nuevoPrecio) || nuevoPrecio < 0) {
+        alert("Por favor ingrese un número de precio válido.");
+        return;
+    }
+
+    db.collection("menu").doc(idFirebase).update({
+        precio: nuevoPrecio
+    }).then(() => {
+        console.log("Precio actualizado correctamente.");
+    }).catch((error) => {
+        console.error("Error al cambiar precio:", error);
+        alert("Ocurrió un error al intentar actualizar el precio.");
+    });
+}
+
+function editarProductoCompleto(idFirebase) {
+    const prod = menu.find(p => p.idFirebase === idFirebase);
+    if (!prod) return;
+
+    document.getElementById('modal-producto-titulo').innerText = "Editar Producto";
+    document.getElementById('prod-id-firebase').value = idFirebase;
+    document.getElementById('prod-nombre').value = prod.nombre || "";
+    document.getElementById('prod-categoria').value = prod.categoria || "hamburguesas";
+    document.getElementById('prod-precio').value = prod.precio || 0;
+    document.getElementById('prod-descripcion').value = prod.descripcion || "";
+    
+    document.getElementById('modal-producto').classList.remove('hidden');
+}
+
+function guardarProducto(e) {
+    e.preventDefault();
+
+    const idFirebase = document.getElementById('prod-id-firebase').value;
+    const nombre = document.getElementById('prod-nombre').value.trim();
+    const categoria = document.getElementById('prod-categoria').value;
+    const precio = Number(document.getElementById('prod-precio').value);
+    const descripcion = document.getElementById('prod-descripcion').value.trim();
+
+    if (!nombre || isNaN(precio)) {
+        alert("Por favor completa los campos obligatorios.");
+        return;
+    }
+
+    const datosProducto = {
+        nombre: nombre,
+        categoria: categoria,
+        precio: precio,
+        descripcion: descripcion,
+        disponible: true
+    };
+
+    if (idFirebase) {
+        db.collection("menu").doc(idFirebase).update(datosProducto).then(() => {
+            cerrarModalProducto();
+        }).catch(err => console.error("Error al actualizar producto:", err));
+    } else {
+        db.collection("menu").add(datosProducto).then(() => {
+            cerrarModalProducto();
+        }).catch(err => console.error("Error al crear producto:", err));
+    }
+}
+
 // Impresión en Comandera Térmica
-function imprimirTicket(id) {
-    const p = pedidos.find(item => item.id === id);
+function imprimirTicket(idFirebase) {
+    const p = pedidos.find(item => item.idFirebase === idFirebase);
     if (!p) return;
 
     let itemsTxt = p.items.map(i => `${i.cantidad}x ${i.nombre.padEnd(20, ' ')} $${(i.precio * i.cantidad).toLocaleString()}`).join('<br>');
+    const numeroOrdenMostrado = p.numeroOrden || `ORD-${String(p.idOrdenSecuencial || 1).padStart(4, '0')}`;
 
     const ticketContent = `
         <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px;">
             <h2 style="font-size: 16px; font-weight: bold; margin:0;">STATION BAJÓN</h2>
             <p style="font-size: 10px; margin:2px 0;">Villa Lugano - Delivery</p>
-            <p style="font-size: 10px; margin:0;">Ticket #${p.id.toString().slice(-4)} - ${p.fecha}</p>
+            <p style="font-size: 10px; margin:0;">${numeroOrdenMostrado} - ${p.fecha}</p>
         </div>
         <div style="font-size: 11px; margin-bottom: 8px;">
             <strong>CLIENTE:</strong> ${p.cliente}<br>
