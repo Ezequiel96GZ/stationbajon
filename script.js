@@ -334,7 +334,7 @@ function cambiarTipoEntrega() {
 }
 
 // Envío de Pedido a Firestore y WhatsApp
-function enviarAPedidoWhatsApp() {
+async function enviarAPedidoWhatsApp() {
     if (isSubmitting) return;
 
     if (!localAbierto) {
@@ -385,29 +385,39 @@ function enviarAPedidoWhatsApp() {
         btnEnviar.innerText = "PROCESANDO...";
     }
 
-    const numeroSecuencial = pedidos.length + 1;
-    const numeroOrdenFormateado = "ORD-" + String(numeroSecuencial).padStart(4, '0');
+    try {
+        // Obtenemos el número secuencial más alto registrado o contaremos documentos existentes
+        const snapshot = await db.collection("pedidos").get();
+        let maxSecuencial = 0;
+        snapshot.forEach(doc => {
+            const sec = doc.data().idOrdenSecuencial || 0;
+            if (sec > maxSecuencial) maxSecuencial = sec;
+        });
 
-    const ahora = new Date();
-    const fechaFormateada = ahora.toLocaleDateString('es-AR');
-    const horaFormateada = ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-    const fechaCompletaStr = `${fechaFormateada} - ${horaFormateada} hs`;
+        const numeroSecuencial = maxSecuencial + 1;
+        const numeroOrdenFormateado = "ORD-" + String(numeroSecuencial).padStart(4, '0');
 
-    const nuevoPedido = {
-        id: Date.now(),
-        idOrdenSecuencial: numeroSecuencial,
-        numeroOrden: numeroOrdenFormateado,
-        fecha: fechaCompletaStr,
-        cliente: nombre,
-        tipo: tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️',
-        direccion: tipo === 'delivery' ? direccion : 'Retira en local',
-        pago: pago,
-        notas: notas,
-        items: [...carrito],
-        total: total
-    };
+        const ahora = new Date();
+        const fechaFormateada = ahora.toLocaleDateString('es-AR');
+        const horaFormateada = ahora.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        const fechaCompletaStr = `${fechaFormateada} - ${horaFormateada} hs`;
 
-    db.collection("pedidos").add(nuevoPedido).then(() => {
+        const nuevoPedido = {
+            id: Date.now(),
+            idOrdenSecuencial: numeroSecuencial,
+            numeroOrden: numeroOrdenFormateado,
+            fecha: fechaCompletaStr,
+            cliente: nombre,
+            tipo: tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️',
+            direccion: tipo === 'delivery' ? direccion : 'Retira en local',
+            pago: pago,
+            notas: notas,
+            items: [...carrito],
+            total: total
+        };
+
+        await db.collection("pedidos").add(nuevoPedido);
+
         let msj = `*--- NUEVO PEDIDO (${numeroOrdenFormateado}) - STATION BAJÓN ---*\n`;
         msj += `*Cliente:* ${nombre}\n`;
         msj += `*Modalidad:* ${tipo === 'delivery' ? 'Delivery 🛵' : 'Retiro en local 🛍️'}\n`;
@@ -442,21 +452,16 @@ function enviarAPedidoWhatsApp() {
 
         window.open(url, '_blank');
 
-        isSubmitting = false;
-        if (btnEnviar) {
-            btnEnviar.style.opacity = "1";
-            btnEnviar.innerText = "ENVIAR PEDIDO POR WHATSAPP";
-        }
-    }).catch((error) => {
+    } catch (error) {
         console.error("Error al registrar el pedido: ", error);
         alert("Hubo un error al enviar el pedido a la base de datos.");
-        
+    } finally {
         isSubmitting = false;
         if (btnEnviar) {
             btnEnviar.style.opacity = "1";
             btnEnviar.innerText = "ENVIAR PEDIDO POR WHATSAPP";
         }
-    });
+    }
 }
 
 // --- AUTENTICACIÓN ADMIN ---
@@ -570,15 +575,21 @@ function toggleEstadoLocal() {
     });
 }
 
-function limpiarComandera() {
-    if (confirm("¿Estás seguro de borrar todos los pedidos de la base de datos?")) {
-        db.collection("pedidos").get().then((querySnapshot) => {
+// Limpiar comandera borrando físicamente la colección en lote para reiniciar contador a ORD-0001
+async function limpiarComandera() {
+    if (confirm("¿Estás seguro de borrar todos los pedidos de la base de datos? Esto reiniciará el número de orden a ORD-0001.")) {
+        try {
+            const querySnapshot = await db.collection("pedidos").get();
+            const batch = db.batch();
             querySnapshot.forEach((doc) => {
-                db.collection("pedidos").doc(doc.id).delete();
+                batch.delete(doc.ref);
             });
-        }).catch((error) => {
+            await batch.commit();
+            console.log("Comandera limpiada con éxito.");
+        } catch (error) {
             console.error("Error al limpiar la comandera: ", error);
-        });
+            alert("No tienes permisos o ocurrió un error al limpiar la comandera.");
+        }
     }
 }
 
